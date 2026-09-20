@@ -12,6 +12,19 @@ function getPrefix(guildId) {
   return prefixes[guildId] || DEFAULT_PREFIX;
 }
 
+const buyersPath = path.join(__dirname, 'buyers.json');
+
+function isAuthorized(message) {
+  // Les administrateurs et le proprietaire du serveur ont toujours acces
+  if (message.member.permissions.has('Administrator')) return true;
+  if (message.guild.ownerId === message.author.id) return true;
+
+  if (!fs.existsSync(buyersPath)) return false;
+  const buyers = JSON.parse(fs.readFileSync(buyersPath, 'utf8'));
+  const guildBuyers = buyers[message.guild.id] || [];
+  return guildBuyers.includes(message.author.id);
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -57,6 +70,10 @@ client.on('messageCreate', async (message) => {
 
   const command = client.commands.get(commandName);
   if (!command) return;
+
+  if (!isAuthorized(message)) {
+    return message.reply('❌ Tu n\'es pas autorise a utiliser ce bot. Demande a un administrateur de t\'ajouter avec `&buyer`.');
+  }
 
   try {
     await command.execute(message, args, client);
