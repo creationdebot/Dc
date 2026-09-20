@@ -1,7 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { Client, GatewayIntentBits, Partials, Collection, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const DEFAULT_PREFIX = process.env.PREFIX || '&';
 const prefixPath = path.join(__dirname, 'prefixes.json');
@@ -206,6 +206,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     logChannel.send({ embeds: [embed] }).catch(() => {});
   }
 });
+
 const autoroleePath = path.join(__dirname, 'autorole.json');
 
 client.on('guildMemberAdd', async (member) => {
@@ -218,6 +219,65 @@ client.on('guildMemberAdd', async (member) => {
   if (!role) return;
 
   await member.roles.add(role).catch(() => {});
+});
+
+const TICKET_LABELS = {
+  ticket_owner: { name: 'owner', title: '👑 Ticket - Parler a un owner' },
+  ticket_staff: { name: 'staff', title: '📋 Ticket - Recrutement staff' },
+  ticket_other: { name: 'question', title: '❓ Ticket - Autre question' },
+};
+
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  if (TICKET_LABELS[interaction.customId]) {
+    const guild = interaction.guild;
+    const info = TICKET_LABELS[interaction.customId];
+    const channelName = `ticket-${info.name}-${interaction.user.username}`.toLowerCase().slice(0, 90);
+
+    const existing = guild.channels.cache.find(c => c.topic === `ticket:${interaction.user.id}`);
+    if (existing) {
+      return interaction.reply({ content: `Tu as deja un ticket ouvert : ${existing}`, ephemeral: true });
+    }
+
+    let category = guild.channels.cache.find(c => c.name === 'Tickets' && c.type === 4);
+    if (!category) {
+      category = await guild.channels.create({ name: 'Tickets', type: 4 }).catch(() => null);
+    }
+
+    const ticketChannel = await guild.channels.create({
+      name: channelName,
+      type: 0,
+      parent: category?.id,
+      topic: `ticket:${interaction.user.id}`,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id, deny: ['ViewChannel'] },
+        { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
+      ],
+    }).catch(() => null);
+
+    if (!ticketChannel) {
+      return interaction.reply({ content: 'Erreur lors de la creation du ticket.', ephemeral: true });
+    }
+
+    const closeRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer le ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
+    );
+
+    await ticketChannel.send({
+      content: `${interaction.user} | Le staff va te repondre bientot.`,
+      embeds: [new EmbedBuilder().setTitle(info.title).setColor(0x3498DB).setDescription('Explique ta demande ici. Un membre du staff va s\'en occuper.')],
+      components: [closeRow],
+    });
+
+    return interaction.reply({ content: `Ton ticket a ete cree : ${ticketChannel}`, ephemeral: true });
+  }
+
+  if (interaction.customId === 'ticket_close') {
+    if (!interaction.channel.topic?.startsWith('ticket:')) return;
+    await interaction.reply('🔒 Ce ticket sera ferme dans 5 secondes...');
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
