@@ -20,4 +20,8 @@ function getTargetMember(message, args) {
   return null;
 }
 
-module.exports = { hasPermission, errorEmbed, successEmbed, getTargetMember };
+function getLogChannel(guild, name) {
+  return guild.channels.cache.find(c => c.name === name && c.isTextBased());
+}
+
+module.exports = { hasPermission, errorEmbed, successEmbed, getTargetMember, getLogChannel };
