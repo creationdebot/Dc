@@ -1,7 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, EmbedBuilder } = require('discord.js');
 
 const DEFAULT_PREFIX = process.env.PREFIX || '&';
 const prefixPath = path.join(__dirname, 'prefixes.json');
@@ -15,7 +15,6 @@ function getPrefix(guildId) {
 const buyersPath = path.join(__dirname, 'buyers.json');
 
 function isAuthorized(message) {
-  // Les administrateurs et le proprietaire du serveur ont toujours acces
   if (message.member.permissions.has('Administrator')) return true;
   if (message.guild.ownerId === message.author.id) return true;
 
@@ -46,41 +45,4 @@ for (const file of commandFiles) {
   if (command?.name) {
     client.commands.set(command.name, command);
     if (command.aliases) {
-      for (const alias of command.aliases) client.commands.set(alias, command);
-    }
-  }
-}
-
-client.once('ready', () => {
-  console.log(`Connecte en tant que ${client.user.tag}`);
-  client.user.setPresence({
-    activities: [{ name: `${DEFAULT_PREFIX}help` }],
-    status: 'online',
-  });
-});
-
-client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-
-  const prefix = getPrefix(message.guild.id);
-  if (!message.content.startsWith(prefix)) return;
-
-  const args = message.content.slice(prefix.length).trim().split(/\s+/);
-  const commandName = args.shift().toLowerCase();
-
-  const command = client.commands.get(commandName);
-  if (!command) return;
-
-  if (!isAuthorized(message)) {
-    return message.reply('❌ Tu n\'es pas autorise a utiliser ce bot. Demande a un administrateur de t\'ajouter avec `&buyer`.');
-  }
-
-  try {
-    await command.execute(message, args, client);
-  } catch (err) {
-    console.error(err);
-    message.reply('Une erreur est survenue lors de l\'execution de cette commande.').catch(() => {});
-  }
-});
-
-client.login(process.env.DISCORD_TOKEN);
+      for (const alias of command.aliases) client.commands
