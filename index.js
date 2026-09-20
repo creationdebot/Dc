@@ -3,7 +3,14 @@ const fs = require('fs');
 const path = require('path');
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 
-const PREFIX = process.env.PREFIX || '&';
+const DEFAULT_PREFIX = process.env.PREFIX || '&';
+const prefixPath = path.join(__dirname, 'prefixes.json');
+
+function getPrefix(guildId) {
+  if (!fs.existsSync(prefixPath)) return DEFAULT_PREFIX;
+  const prefixes = JSON.parse(fs.readFileSync(prefixPath, 'utf8'));
+  return prefixes[guildId] || DEFAULT_PREFIX;
+}
 
 const client = new Client({
   intents: [
@@ -18,7 +25,6 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// Chargement automatique des commandes dans /commands
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
 
@@ -35,16 +41,18 @@ for (const file of commandFiles) {
 client.once('ready', () => {
   console.log(`Connecte en tant que ${client.user.tag}`);
   client.user.setPresence({
-    activities: [{ name: `${PREFIX}help` }],
+    activities: [{ name: `${DEFAULT_PREFIX}help` }],
     status: 'online',
   });
 });
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
-  if (!message.content.startsWith(PREFIX)) return;
 
-  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  const prefix = getPrefix(message.guild.id);
+  if (!message.content.startsWith(prefix)) return;
+
+  const args = message.content.slice(prefix.length).trim().split(/\s+/);
   const commandName = args.shift().toLowerCase();
 
   const command = client.commands.get(commandName);
