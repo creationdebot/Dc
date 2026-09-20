@@ -54,6 +54,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -277,6 +278,26 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.channel.topic?.startsWith('ticket:')) return;
     await interaction.reply('🔒 Ce ticket sera ferme dans 5 secondes...');
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+  }
+});
+
+const leashPath = path.join(__dirname, 'leash.json');
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  if (!fs.existsSync(leashPath)) return;
+  if (!newState.channelId || oldState.channelId === newState.channelId) return;
+
+  const leash = JSON.parse(fs.readFileSync(leashPath, 'utf8'));
+  const guildLeash = leash[newState.guild.id];
+  if (!guildLeash) return;
+
+  for (const [followerId, entry] of Object.entries(guildLeash)) {
+    if (entry.leaderId !== newState.member.id) continue;
+
+    const followerMember = await newState.guild.members.fetch(followerId).catch(() => null);
+    if (followerMember?.voice.channelId) {
+      await followerMember.voice.setChannel(newState.channelId).catch(() => {});
+    }
   }
 });
 
