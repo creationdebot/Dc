@@ -1,5 +1,5 @@
-const { PermissionsBitField } = require('discord.js');
-const { hasPermission, errorEmbed, successEmbed, getTargetMember } = require('../utils');
+const { PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { hasPermission, errorEmbed, successEmbed, getTargetMember, getLogChannel } = require('../utils');
 
 module.exports = {
   name: 'ban',
@@ -19,6 +19,20 @@ module.exports = {
 
     const reason = args.slice(1).join(' ') || 'Aucune raison fournie';
     await target.ban({ reason });
-    return message.reply({ embeds: [successEmbed(`**${target.user.tag}** a ete banni. Raison : ${reason}`)] });
+    message.reply({ embeds: [successEmbed(`**${target.user.tag}** a ete banni. Raison : ${reason}`)] });
+
+    const logChannel = getLogChannel(message.guild, 'moderation-logs');
+    if (logChannel) {
+      const logEmbed = new EmbedBuilder()
+        .setTitle('🔨 Membre banni')
+        .setColor(0xE74C3C)
+        .addFields(
+          { name: 'Membre', value: `${target.user.tag} (${target.id})` },
+          { name: 'Moderateur', value: `${message.author.tag}` },
+          { name: 'Raison', value: reason },
+        )
+        .setTimestamp();
+      logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+    }
   },
 };
