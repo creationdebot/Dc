@@ -13,6 +13,7 @@ function getPrefix(guildId) {
 }
 
 const buyersPath = path.join(__dirname, 'buyers.json');
+const securityPath = path.join(__dirname, 'security.json');
 
 function isAuthorized(message) {
   if (message.member.permissions.has('Administrator')) return true;
@@ -22,6 +23,28 @@ function isAuthorized(message) {
   const buyers = JSON.parse(fs.readFileSync(buyersPath, 'utf8'));
   const guildBuyers = buyers[message.guild.id] || [];
   return guildBuyers.includes(message.author.id);
+}
+
+function isSecurityEnabled(guildId) {
+  if (!fs.existsSync(securityPath)) return false;
+  const data = JSON.parse(fs.readFileSync(securityPath, 'utf8'));
+  return !!data[guildId];
+}
+
+async function punishExecutor(guild, executor, reason) {
+  if (!executor) return;
+  if (executor.id === guild.ownerId) return;
+  if (executor.id === guild.client.user.id) return;
+
+  const member = await guild.members.fetch(executor.id).catch(() => null);
+  if (!member || !member.kickable) return;
+
+  await member.kick(reason).catch(() => {});
+
+  const logChannel = guild.channels.cache.find(c => c.name === 'moderation-logs' && c.isTextBased());
+  if (logChannel) {
+    logChannel.send(`🚨 **${executor.tag}** a ete expulse automatiquement (mode securite maximale) : ${reason}`).catch(() => {});
+  }
 }
 
 const client = new Client({
@@ -82,7 +105,72 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+client.on('channelDelete', async (channel) => {
+  if (!channel.guild || !isSecurityEnabled(channel.guild.id)) return;
+  const logs = await channel.guild.fetchAuditLogs({ type: 12, limit: 1 }).catch(() => null);
+  const entry = logs?.entries.first();
+  if (entry && entry.target?.id === channel.id) {
+    await punishExecutor(channel.guild, entry.executor, `Suppression du salon #${channel.name}`);
+  }
+});
+
+client.on('channelCreate', async (channel) => {
+  if (!channel.guild || !isSecurityEnabled(channel.guild.id)) return;
+  const logs = await channel.guild.fetchAuditLogs({ type: 10, limit: 1 }).catch(() => null);
+  const entry = logs?.entries.first();
+  if (entry && entry.target?.id === channel.id) {
+    await channel.delete().catch(() => {});
+    await punishExecutor(channel.guild, entry.executor, `Creation non autorisee du salon #${channel.name}`);
+  }
+});
+
+client.on('roleDelete', async (role) => {
+  if (!isSecurityEnabled(role.guild.id)) return;
+  const logs = await role.guild.fetchAuditLogs({ type: 32, limit: 1 }).catch(() => null);
+  const entry = logs?.entries.first();
+  if (entry && entry.target?.id === role.id) {
+    await punishExecutor(role.guild, entry.executor, `Suppression du role ${role.name}`);
+  }
+});
+
+client.on('roleCreate', async (role) => {
+  if (!isSecurityEnabled(role.guild.id)) return;
+  const logs = await role.guild.fetchAuditLogs({ type: 30, limit: 1 }).catch(() => null);
+  const entry = logs?.entries.first();
+  if (entry && entry.target?.id === role.id) {
+    await role.delete().catch(() => {});
+    await punishExecutor(role.guild, entry.executor, `Creation non autorisee du role ${role.name}`);
+  }
+});
+
+client.on('roleUpdate', async (oldRole, newRole) => {
+  if (!isSecurityEnabled(newRole.guild.id)) return;
+  if (newRole.id === newRole.guild.id && !oldRole.permissions.equals(newRole.permissions)) {
+    await newRole.setPermissions(oldRole.permissions).catch(() => {});
+    const logs = await newRole.guild.fetchAuditLogs({ type: 31, limit: 1 }).catch(() => null);
+    const entry = logs?.entries.first();
+    await punishExecutor(newRole.guild, entry?.executor, 'Modification des permissions de @everyone');
+  }
+});
+
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  if (isSecurityEnabled(newMember.guild.id)) {
+    const gainedAdmin = !oldMember.permissions.has('Administrator') && newMember.permissions.has('Administrator');
+    if (gainedAdmin) {
+      const logs = await newMember.guild.fetchAuditLogs({ type: 25, limit: 1 }).catch(() => null);
+      const entry = logs?.entries.first();
+      const executor = entry?.executor;
+
+      if (executor && executor.id !== newMember.guild.ownerId) {
+        const dangerousRoles = newMember.roles.cache.filter(r => r.permissions.has('Administrator'));
+        for (const [, role] of dangerousRoles) {
+          await newMember.roles.remove(role).catch(() => {});
+        }
+        await punishExecutor(newMember.guild, executor, `A donne la permission Administrateur a ${newMember.user.tag}`);
+      }
+    }
+  }
+
   const oldRoles = oldMember.roles.cache;
   const newRoles = newMember.roles.cache;
 
