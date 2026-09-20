@@ -1,5 +1,5 @@
-const { PermissionsBitField } = require('discord.js');
-const { hasPermission, errorEmbed, successEmbed, getTargetMember } = require('../utils');
+const { PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { hasPermission, errorEmbed, successEmbed, getTargetMember, getLogChannel } = require('../utils');
 
 module.exports = {
   name: 'kick',
@@ -19,6 +19,20 @@ module.exports = {
 
     const reason = args.slice(1).join(' ') || 'Aucune raison fournie';
     await target.kick(reason);
-    return message.reply({ embeds: [successEmbed(`**${target.user.tag}** a ete expulse. Raison : ${reason}`)] });
+    message.reply({ embeds: [successEmbed(`**${target.user.tag}** a ete expulse. Raison : ${reason}`)] });
+
+    const logChannel = getLogChannel(message.guild, 'moderation-logs');
+    if (logChannel) {
+      const logEmbed = new EmbedBuilder()
+        .setTitle('👢 Membre expulse')
+        .setColor(0xE67E22)
+        .addFields(
+          { name: 'Membre', value: `${target.user.tag} (${target.id})` },
+          { name: 'Moderateur', value: `${message.author.tag}` },
+          { name: 'Raison', value: reason },
+        )
+        .setTimestamp();
+      logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+    }
   },
 };
