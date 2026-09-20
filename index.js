@@ -45,4 +45,78 @@ for (const file of commandFiles) {
   if (command?.name) {
     client.commands.set(command.name, command);
     if (command.aliases) {
-      for (const alias of command.aliases) client.commands
+      for (const alias of command.aliases) client.commands.set(alias, command);
+    }
+  }
+}
+
+client.once('ready', () => {
+  console.log(`Connecte en tant que ${client.user.tag}`);
+  client.user.setPresence({
+    activities: [{ name: `${DEFAULT_PREFIX}help` }],
+    status: 'online',
+  });
+});
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+
+  const prefix = getPrefix(message.guild.id);
+  if (!message.content.startsWith(prefix)) return;
+
+  const args = message.content.slice(prefix.length).trim().split(/\s+/);
+  const commandName = args.shift().toLowerCase();
+
+  const command = client.commands.get(commandName);
+  if (!command) return;
+
+  if (!isAuthorized(message)) {
+    return message.reply('Tu n\'es pas autorise a utiliser ce bot. Demande a un administrateur de t\'ajouter avec &buyer.');
+  }
+
+  try {
+    await command.execute(message, args, client);
+  } catch (err) {
+    console.error(err);
+    message.reply('Une erreur est survenue lors de l\'execution de cette commande.').catch(() => {});
+  }
+});
+
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  const oldRoles = oldMember.roles.cache;
+  const newRoles = newMember.roles.cache;
+
+  const addedRoles = newRoles.filter(r => !oldRoles.has(r.id));
+  const removedRoles = oldRoles.filter(r => !newRoles.has(r.id));
+
+  if (addedRoles.size === 0 && removedRoles.size === 0) return;
+
+  const logChannel = newMember.guild.channels.cache.find(c => c.name === 'role-logs' && c.isTextBased());
+  if (!logChannel) return;
+
+  if (addedRoles.size > 0) {
+    const embed = new EmbedBuilder()
+      .setTitle('Role(s) ajoute(s)')
+      .setColor(0x2ECC71)
+      .addFields(
+        { name: 'Membre', value: `${newMember.user.tag} (${newMember.id})` },
+        { name: 'Role(s)', value: addedRoles.map(r => r.name).join(', ') },
+      )
+      .setTimestamp();
+    logChannel.send({ embeds: [embed] }).catch(() => {});
+  }
+
+  if (removedRoles.size > 0) {
+    const embed = new EmbedBuilder()
+      .setTitle('Role(s) retire(s)')
+      .setColor(0xE74C3C)
+      .addFields(
+        { name: 'Membre', value: `${newMember.user.tag} (${newMember.id})` },
+        { name: 'Role(s)', value: removedRoles.map(r => r.name).join(', ') },
+      )
+      .setTimestamp();
+    logChannel.send({ embeds: [embed] }).catch(() => {});
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);
