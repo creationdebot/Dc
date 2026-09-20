@@ -1,7 +1,6 @@
-const { PermissionsBitField } = require('discord.js');
-const { hasPermission, errorEmbed, successEmbed, getTargetMember } = require('../utils');
+const { PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { hasPermission, errorEmbed, successEmbed, getTargetMember, getLogChannel } = require('../utils');
 
-// Convertit "10m", "1h", "30s" en millisecondes. Par defaut 10 minutes.
 function parseDuration(str) {
   if (!str) return 10 * 60 * 1000;
   const match = str.match(/^(\d+)(s|m|h|d)$/);
@@ -9,7 +8,7 @@ function parseDuration(str) {
   const value = parseInt(match[1], 10);
   const unit = match[2];
   const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
-  return Math.min(value * multipliers[unit], 28 * 86400000); // max 28 jours (limite Discord)
+  return Math.min(value * multipliers[unit], 28 * 86400000);
 }
 
 module.exports = {
@@ -33,8 +32,23 @@ module.exports = {
     const reason = args.slice(durationArg && /^\d+(s|m|h|d)$/.test(durationArg) ? 2 : 1).join(' ') || 'Aucune raison fournie';
 
     await target.timeout(duration, reason);
-    return message.reply({
+    message.reply({
       embeds: [successEmbed(`**${target.user.tag}** a ete mute pendant ${duration / 60000} minute(s). Raison : ${reason}`)],
     });
+
+    const logChannel = getLogChannel(message.guild, 'moderation-logs');
+    if (logChannel) {
+      const logEmbed = new EmbedBuilder()
+        .setTitle('🔇 Membre mute')
+        .setColor(0xF1C40F)
+        .addFields(
+          { name: 'Membre', value: `${target.user.tag} (${target.id})` },
+          { name: 'Moderateur', value: `${message.author.tag}` },
+          { name: 'Duree', value: `${duration / 60000} minute(s)` },
+          { name: 'Raison', value: reason },
+        )
+        .setTimestamp();
+      logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+    }
   },
 };
