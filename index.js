@@ -206,5 +206,18 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     logChannel.send({ embeds: [embed] }).catch(() => {});
   }
 });
+const autoroleePath = path.join(__dirname, 'autorole.json');
+
+client.on('guildMemberAdd', async (member) => {
+  if (!fs.existsSync(autoroleePath)) return;
+  const data = JSON.parse(fs.readFileSync(autoroleePath, 'utf8'));
+  const roleId = data[member.guild.id];
+  if (!roleId) return;
+
+  const role = member.guild.roles.cache.get(roleId);
+  if (!role) return;
+
+  await member.roles.add(role).catch(() => {});
+});
 
 client.login(process.env.DISCORD_TOKEN);
