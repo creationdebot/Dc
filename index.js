@@ -95,7 +95,7 @@ client.on('messageCreate', async (message) => {
   if (!command) return;
 
   if (!isAuthorized(message)) {
-    return message.reply('Tu n\'es pas autorise a utiliser ce bot. Demande a un administrateur de t\'ajouter avec &buyer.');
+    return message.reply('❌ Tu n\'es pas autorise a utiliser ce bot. Demande a un administrateur de t\'ajouter avec `&buyer`.');
   }
 
   try {
@@ -105,6 +105,8 @@ client.on('messageCreate', async (message) => {
     message.reply('Une erreur est survenue lors de l\'execution de cette commande.').catch(() => {});
   }
 });
+
+// --- Protections anti-nuke (mode securite maximale) ---
 
 client.on('channelDelete', async (channel) => {
   if (!channel.guild || !isSecurityEnabled(channel.guild.id)) return;
@@ -155,28 +157,33 @@ client.on('roleUpdate', async (oldRole, newRole) => {
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
-  if (isSecurityEnabled(newMember.guild.id)) {
-    const gainedAdmin = !oldMember.permissions.has('Administrator') && newMember.permissions.has('Administrator');
-    if (gainedAdmin) {
-      const logs = await newMember.guild.fetchAuditLogs({ type: 25, limit: 1 }).catch(() => null);
-      const entry = logs?.entries.first();
-      const executor = entry?.executor;
-
-      if (executor && executor.id !== newMember.guild.ownerId) {
-        const dangerousRoles = newMember.roles.cache.filter(r => r.permissions.has('Administrator'));
-        for (const [, role] of dangerousRoles) {
-          await newMember.roles.remove(role).catch(() => {});
-        }
-        await punishExecutor(newMember.guild, executor, `A donne la permission Administrateur a ${newMember.user.tag}`);
-      }
-    }
-  }
-
   const oldRoles = oldMember.roles.cache;
   const newRoles = newMember.roles.cache;
 
   const addedRoles = newRoles.filter(r => !oldRoles.has(r.id));
   const removedRoles = oldRoles.filter(r => !newRoles.has(r.id));
+
+  if (isSecurityEnabled(newMember.guild.id) && addedRoles.size > 0) {
+    const logs = await newMember.guild.fetchAuditLogs({ type: 25, limit: 1 }).catch(() => null);
+    const entry = logs?.entries.first();
+    const executor = entry?.executor;
+
+    let executorIsSafe = true;
+    if (executor) {
+      const isOwner = executor.id === newMember.guild.ownerId;
+      const isBot = executor.id === newMember.guild.client.user.id;
+      const executorMember = await newMember.guild.members.fetch(executor.id).catch(() => null);
+      const isAdmin = executorMember?.permissions.has('Administrator');
+      executorIsSafe = isOwner || isBot || isAdmin;
+    }
+
+    if (executor && !executorIsSafe) {
+      for (const [, role] of addedRoles) {
+        await newMember.roles.remove(role).catch(() => {});
+      }
+      await punishExecutor(newMember.guild, executor, `A donne un/des role(s) a ${newMember.user.tag} (${addedRoles.map(r => r.name).join(', ')})`);
+    }
+  }
 
   if (addedRoles.size === 0 && removedRoles.size === 0) return;
 
@@ -185,7 +192,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
   if (addedRoles.size > 0) {
     const embed = new EmbedBuilder()
-      .setTitle('Role(s) ajoute(s)')
+      .setTitle('➕ Role(s) ajoute(s)')
       .setColor(0x2ECC71)
       .addFields(
         { name: 'Membre', value: `${newMember.user.tag} (${newMember.id})` },
@@ -197,7 +204,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
   if (removedRoles.size > 0) {
     const embed = new EmbedBuilder()
-      .setTitle('Role(s) retire(s)')
+      .setTitle('➖ Role(s) retire(s)')
       .setColor(0xE74C3C)
       .addFields(
         { name: 'Membre', value: `${newMember.user.tag} (${newMember.id})` },
