@@ -82,8 +82,28 @@ client.once('ready', () => {
   });
 });
 
+const statsPath = path.join(__dirname, 'stats.json');
+
+function incrementMessageCount(guildId, userId) {
+  const stats = fs.existsSync(statsPath) ? JSON.parse(fs.readFileSync(statsPath, 'utf8')) : {};
+  stats[guildId] = stats[guildId] || {};
+  stats[guildId][userId] = stats[guildId][userId] || { messages: 0, voiceSeconds: 0 };
+  stats[guildId][userId].messages++;
+  fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
+}
+
+function addVoiceSeconds(guildId, userId, seconds) {
+  const stats = fs.existsSync(statsPath) ? JSON.parse(fs.readFileSync(statsPath, 'utf8')) : {};
+  stats[guildId] = stats[guildId] || {};
+  stats[guildId][userId] = stats[guildId][userId] || { messages: 0, voiceSeconds: 0 };
+  stats[guildId][userId].voiceSeconds += seconds;
+  fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
+}
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
+
+  incrementMessageCount(message.guild.id, message.author.id);
 
   const prefix = getPrefix(message.guild.id);
   if (!message.content.startsWith(prefix)) return;
@@ -105,8 +125,6 @@ client.on('messageCreate', async (message) => {
     message.reply('Une erreur est survenue lors de l\'execution de cette commande.').catch(() => {});
   }
 });
-
-// --- Protections anti-nuke (mode securite maximale) ---
 
 client.on('channelDelete', async (channel) => {
   if (!channel.guild || !isSecurityEnabled(channel.guild.id)) return;
@@ -285,6 +303,25 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.channel.topic?.startsWith('ticket:')) return;
     await interaction.reply('🔒 Ce ticket sera ferme dans 5 secondes...');
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+  }
+});
+
+const voiceJoinTimestamps = new Map();
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  const key = `${newState.guild.id}-${newState.member.id}`;
+
+  if (!oldState.channelId && newState.channelId) {
+    voiceJoinTimestamps.set(key, Date.now());
+  }
+
+  if (oldState.channelId && !newState.channelId) {
+    const joinedAt = voiceJoinTimestamps.get(key);
+    if (joinedAt) {
+      const seconds = Math.floor((Date.now() - joinedAt) / 1000);
+      addVoiceSeconds(newState.guild.id, newState.member.id, seconds);
+      voiceJoinTimestamps.delete(key);
+    }
   }
 });
 
