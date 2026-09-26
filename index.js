@@ -175,6 +175,23 @@ client.on('roleUpdate', async (oldRole, newRole) => {
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  if (!oldMember.premiumSince && newMember.premiumSince) {
+    const boostChannelPath = path.join(__dirname, 'boostchannel.json');
+    if (fs.existsSync(boostChannelPath)) {
+      const config = JSON.parse(fs.readFileSync(boostChannelPath, 'utf8'));
+      const channelId = config[newMember.guild.id];
+      const channel = channelId ? newMember.guild.channels.cache.get(channelId) : null;
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('🚀 Nouveau boost !')
+          .setDescription(`${newMember} vient de booster le serveur ! Merci beaucoup 💜`)
+          .setColor(0xF47FFF)
+          .setThumbnail(newMember.user.displayAvatarURL());
+        channel.send({ content: `${newMember}`, embeds: [embed] }).catch(() => {});
+      }
+    }
+  }
+
   const oldRoles = oldMember.roles.cache;
   const newRoles = newMember.roles.cache;
 
