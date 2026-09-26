@@ -1,9 +1,22 @@
-const { PermissionsBitField, EmbedBuilder } = require('discord.js');
-const { hasPermission, errorEmbed } = require('../utils');
+const fs = require('fs');
+const path = require('path');
+const { PermissionsBitField } = require('discord.js');
+const { hasPermission, errorEmbed, successEmbed } = require('../utils');
+
+const boostChannelPath = path.join(__dirname, '..', 'boostchannel.json');
+
+function loadConfig() {
+  if (!fs.existsSync(boostChannelPath)) fs.writeFileSync(boostChannelPath, '{}');
+  return JSON.parse(fs.readFileSync(boostChannelPath, 'utf8'));
+}
+
+function saveConfig(data) {
+  fs.writeFileSync(boostChannelPath, JSON.stringify(data, null, 2));
+}
 
 module.exports = {
   name: 'boost',
-  description: 'Affiche la liste des boosters du serveur dans le salon choisi.',
+  description: 'Definit le salon ou sera annonce automatiquement chaque nouveau boost du serveur.',
   usage: '&boost #salon',
   async execute(message) {
     if (!hasPermission(message, PermissionsBitField.Flags.ManageGuild)) {
@@ -15,29 +28,12 @@ module.exports = {
       return message.reply({ embeds: [errorEmbed('Usage : `&boost #salon`')] });
     }
 
-    const guild = message.guild;
-    await guild.members.fetch();
+    const config = loadConfig();
+    config[message.guild.id] = channel.id;
+    saveConfig(config);
 
-    const boosters = guild.members.cache
-      .filter(m => m.premiumSince)
-      .sort((a, b) => a.premiumSince - b.premiumSince);
-
-    const embed = new EmbedBuilder()
-      .setTitle(`🚀 Boosts de ${guild.name}`)
-      .setColor(0xF47FFF)
-      .addFields(
-        { name: 'Nombre total de boosts', value: `${guild.premiumSubscriptionCount || 0}`, inline: true },
-        { name: 'Niveau du serveur', value: `Niveau ${guild.premiumTier}`, inline: true },
-      );
-
-    if (boosters.size === 0) {
-      embed.addFields({ name: 'Boosters', value: 'Aucun booster pour le moment.' });
-    } else {
-      const list = boosters.map(m => `**${m.user.tag}** - depuis <t:${Math.floor(m.premiumSince.getTime() / 1000)}:D>`).join('\n');
-      embed.addFields({ name: `Boosters (${boosters.size})`, value: list.slice(0, 1024) });
-    }
-
-    await channel.send({ embeds: [embed] });
-    return message.reply(`Liste des boosts envoyee dans ${channel}.`);
+    return message.reply({
+      embeds: [successEmbed(`Chaque nouveau boost du serveur sera desormais annonce automatiquement dans ${channel}.`)],
+    });
   },
 };
