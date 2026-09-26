@@ -31,8 +31,8 @@ module.exports = {
       .setColor(0x3498DB)
       .setThumbnail(target.user.displayAvatarURL())
       .addFields(
-        { name: '💬 Messages envoyes', value: `${userStats.messages}`, inline: true },
-        { name: '🎙️ Temps en vocal', value: formatDuration(userStats.voiceSeconds || 0), inline: true },
+        { name: '💬 Alors tu a passer combien de temps sur le meilleur serv ', value: `${userStats.messages}`, inline: true },
+        { name: '🎙️ ta pas 1s de vocal t gay ', value: formatDuration(userStats.voiceSeconds || 0), inline: true },
       );
 
     return message.reply({ embeds: [embed] });
