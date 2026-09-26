@@ -18,7 +18,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setTitle('🙋 deja pris wlh ')
-      .setDescription(`Ce ticket a ete pris en charge par **${message.author.username}**.`)
+      .setDescription(`je l'ai pris casse toi nn 🦧🐕 **${message.author.username}**.`)
       .setColor(0x2ECC71);
 
     return message.channel.send({ embeds: [embed] });
