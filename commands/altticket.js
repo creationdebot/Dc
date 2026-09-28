@@ -7,7 +7,8 @@ module.exports = {
   async execute(message) {
     const embed = new EmbedBuilder()
       .setTitle('🛒 Buy')
-      .setDescription('Clique sur le bouton **Buy** ci-dessous pour ouvrir un ticket d\'achat avec le staff.')
+      .setDescription('Clique sur le bouton **Buy** ci-dessous pour ouvrir un ticket d\'achat avec le meilleur owner uhq
+                      .')
       .setColor(0x2ECC71);
 
     const row = new ActionRowBuilder().addComponents(
