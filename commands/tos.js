@@ -6,11 +6,11 @@ module.exports = {
   usage: '&tos',
   async execute(message) {
     const embed = new EmbedBuilder()
-      .setTitle('📋 tos discord')
+      .setTitle('📋 tos discord 📋')
       .setDescription(
-        '[https://discord.com/terms](https://discord.com/terms)\n\n' +
-        '[https://discord.com/guidelines](https://discord.com/guidelines)\n\n' +
-        '[https://discord.com/privacy](https://discord.com/privacy)'
+        'https://discord.com/terms\n\n' +
+        'https://discord.com/guidelines\n\n' +
+        'https://discord.com/privacy'
       )
       .setColor(0x2F3136);
 
