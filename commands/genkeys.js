@@ -36,3 +36,4 @@ module.exports = {
     }
     await message.delete().catch(() => {});
   },
+};
