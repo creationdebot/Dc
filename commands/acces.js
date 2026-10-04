@@ -8,9 +8,9 @@ const {
 } = require('discord.js');
 
 // ================= CONFIG =================
-const ROLE_ID = process.env.ROLE_ID || '1556198285834719343';
-const ACCESS_DURATION = 60 * 60 * 1000;      // accès : 1 heure
-const KEY_VALIDITY = 15 * 60 * 1000;         // clé valable 15 min
+const ROLE_ID = process.env.ROLE_ID || 'ID_DU_ROLE_ACCES';
+const ACCESS_DURATION = 2 * 60 * 1000;      // accès : 2 minutes
+const KEY_VALIDITY = 15 * 60 * 1000;         // clé valable 2 min
 const GEN_COOLDOWN = 3 * 60 * 60 * 1000;     // 3h entre deux générations
 const DB_FILE = './keys-data.json';
 // ==========================================
@@ -70,20 +70,36 @@ function useKey(userId, rawKey) {
 }
 
 // ---------- Rôle temporaire ----------
-async function removeAccess(client, guildId, userId) {
-  delete db.access[userId];
-  save();
+// Vérification toutes les 30 secondes : si le temps est écoulé, on retire le rôle.
+// Si le retrait échoue, on réessaie au tour suivant (rien n'est oublié).
+let checking = false;
+async function checkExpirations(client) {
+  if (checking) return;
+  checking = true;
   try {
-    const guild = await client.guilds.fetch(guildId);
-    const member = await guild.members.fetch(userId);
-    await member.roles.remove(ROLE_ID);
-  } catch (e) {
-    console.error('Retrait du rôle impossible :', e.message);
+    let changed = false;
+    for (const [userId, info] of Object.entries(db.access)) {
+      if (Date.now() < info.expiresAt) continue;
+      try {
+        const guild = await client.guilds.fetch(info.guildId);
+        const member = await guild.members.fetch(userId);
+        await member.roles.remove(ROLE_ID, 'Fin des 1h (clé)');
+        delete db.access[userId];
+        changed = true;
+      } catch (e) {
+        // Membre parti / serveur introuvable : on nettoie. Sinon on réessaiera.
+        if (e.code === 10007 || e.code === 10013 || e.code === 10004) {
+          delete db.access[userId];
+          changed = true;
+        } else {
+          console.error(`Retrait du rôle impossible pour ${userId} (nouvel essai dans 30s) :`, e.message);
+        }
+      }
+    }
+    if (changed) save();
+  } finally {
+    checking = false;
   }
-}
-
-function schedule(client, guildId, userId, expiresAt) {
-  setTimeout(() => removeAccess(client, guildId, userId), Math.max(expiresAt - Date.now(), 0));
 }
 
 async function grantAccess(client, member) {
@@ -91,7 +107,6 @@ async function grantAccess(client, member) {
   const expiresAt = Date.now() + ACCESS_DURATION;
   db.access[member.id] = { guildId: member.guild.id, expiresAt };
   save();
-  schedule(client, member.guild.id, member.id, expiresAt);
   return expiresAt;
 }
 
@@ -154,9 +169,8 @@ function init(client) {
   if (initialized) return;
   initialized = true;
   client.on('interactionCreate', (i) => handleInteraction(client, i).catch(console.error));
-  for (const [userId, info] of Object.entries(db.access)) {
-    schedule(client, info.guildId, userId, info.expiresAt);
-  }
+  checkExpirations(client).catch(console.error);
+  setInterval(() => checkExpirations(client).catch(console.error), 30 * 1000);
 }
 
 // ---------- Commande &accès ----------
