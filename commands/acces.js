@@ -8,7 +8,7 @@ const {
 } = require('discord.js');
 
 // ================= CONFIG =================
-const ROLE_ID = process.env.ROLE_ID || 'ID_DU_ROLE_ACCES';
+const ROLE_ID = process.env.ROLE_ID || '1556198285834719343';
 const ACCESS_DURATION = 60 * 60 * 1000;      // accès : 1 heure
 const KEY_VALIDITY = 15 * 60 * 1000;         // clé valable 15 min
 const GEN_COOLDOWN = 3 * 60 * 60 * 1000;     // 3h entre deux générations
