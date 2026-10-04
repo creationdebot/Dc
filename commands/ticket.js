@@ -9,8 +9,8 @@ module.exports = {
       .setColor(0x3498DB);
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ticket_owner').setLabel('Parler a un owner').setEmoji('👑').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId('ticket_staff').setLabel('Recrutement staff').setEmoji('📋').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('ticket_owner').setLabel('owner').setEmoji('🫥').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('ticket_staff').setLabel('payer le vip').setEmoji('👾').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('ticket_other').setLabel('Autre question').setEmoji('❓').setStyle(ButtonStyle.Secondary),
     );
 
