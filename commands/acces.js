@@ -9,7 +9,7 @@ const {
 
 // ================= CONFIG =================
 const ROLE_ID = process.env.ROLE_ID || '1556198285834719343';
-const ACCESS_DURATION = 2 * 60 * 1000;      // accès : 2 minutes
+const ACCESS_DURATION = 60 * 60 * 1000;      // accès : 1 heure
 const KEY_VALIDITY = 15 * 60 * 1000;         // clé valable 2 min
 const GEN_COOLDOWN = 3 * 60 * 60 * 1000;     // 3h entre deux générations
 const DB_FILE = './keys-data.json';
@@ -189,7 +189,7 @@ module.exports = {
 
     const embedGen = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle('🔑 Génération de clé')
+      .setTitle('🔑 me dis pas que tu a pas la dal allez je te laisse te br')
       .setDescription('Clique sur le bouton ci-dessous pour générer ta clé.');
 
     const embedUse = new EmbedBuilder()
