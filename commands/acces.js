@@ -43,11 +43,23 @@ function createKey(userId) {
   return { ok: true, key };
 }
 
+// Génère plusieurs clés d'un coup (pas de cooldown, sans expiration)
+function createManyKeys(userId, count) {
+  const keys = [];
+  for (let i = 0; i < count; i++) {
+    const key = generateKey();
+    db.keys[key] = { userId, createdAt: Date.now(), permanent: true };
+    keys.push(key);
+  }
+  save();
+  return keys;
+}
+
 function useKey(userId, rawKey) {
   const key = rawKey.trim().toUpperCase();
   const entry = db.keys[key];
   if (!entry || entry.userId !== userId) return { ok: false, error: '❌ Clé invalide.' };
-  if (Date.now() - entry.createdAt > KEY_VALIDITY) {
+  if (!entry.permanent && Date.now() - entry.createdAt > KEY_VALIDITY) {
     delete db.keys[key];
     save();
     return { ok: false, error: '⌛ Cette clé a expiré. Génères-en une nouvelle.' };
@@ -152,6 +164,7 @@ module.exports = {
   name: 'accès',
   aliases: ['acces'],
   init,
+  createManyKeys,
 
   async execute(message) {
     init(message.client); // s'enregistre tout seul au 1er appel
