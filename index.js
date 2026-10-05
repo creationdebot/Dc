@@ -77,6 +77,9 @@ for (const file of commandFiles) {
 client.once('ready', () => {
   console.log(`Connecte en tant que ${client.user.tag}`);
   require('./commands/acces').init(client); // <-- LIGNE AJOUTEE (boutons + retrait des roles)
+  require('./commands/verif').init(client); // <-- LIGNE AJOUTEE (verification par reaction)
+  require('./commands/perms').init(client); // <-- LIGNE AJOUTEE (roles temporaires)
+  require('./commands/secur').init(client); // <-- LIGNE AJOUTEE (securite serveur)
   client.user.setPresence({
     activities: [{ name: `${DEFAULT_PREFIX}help` }],
     status: 'online',
@@ -266,8 +269,8 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 const TICKET_LABELS = {
-  ticket_owner: { name: 'owner', title: '👑 Ticket - owner' },
-  ticket_staff: { name: 'staff', title: '📋 Ticket - payer le vip' },
+  ticket_owner: { name: 'owner', title: '👑 Ticket - Parler a un owner' },
+  ticket_staff: { name: 'staff', title: '📋 Ticket - Recrutement staff' },
   ticket_other: { name: 'question', title: '❓ Ticket - Autre question' },
 };
 
@@ -363,5 +366,4 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   }
 });
 
-client.login(process.env.DISCORD_TOKE)
-;
+client.login(process.env.DISCORD_TOKEN);
