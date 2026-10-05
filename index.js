@@ -280,7 +280,7 @@ client.on('guildMemberAdd', async (member) => {
 
 const TICKET_LABELS = {
   ticket_owner: { name: 'owner', title: '👑 Ticket - Parler a un owner' },
-  ticket_staff: { name: 'staff', title: '📋 Ticket - Recrutement staff' },
+  ticket_staff: { name: 'staff', title: '📋 Ticket - tu veux etre staff click sur ce ticket' },
   ticket_other: { name: 'question', title: '❓ Ticket - Autre question' },
 };
 
