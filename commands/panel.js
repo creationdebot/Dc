@@ -2,6 +2,8 @@
 // Poste un panel de tickets avec un menu déroulant "Choisir une catégorie..."
 // 3 catégories : Ticket Owner, Ticket Partenariat, Ticket Animation.
 // Le bouton "Fermer le ticket" utilise le système déjà présent dans ton index.js (ticket_close).
+const fs = require('fs');
+const path = require('path');
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
@@ -15,10 +17,32 @@ const SELECT_ID = 'ticket_panel_select';
 // Exemple : owner: ['123456789012345678']
 // Les administrateurs voient toujours tous les tickets.
 const STAFF_ROLES = {
-  owner: [1556035670458237050],
-  partenariat: [1556753778483396669],
-  animation: [1556687531184103424],
+  owner: [],
+  partenariat: [],
+  animation: [],
 };
+
+// Rôles ajoutés avec la commande -staff (pas besoin d'ID)
+const STAFF_FILE = path.join(__dirname, '..', 'staff-roles.json');
+function loadStaffFile() {
+  if (!fs.existsSync(STAFF_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(STAFF_FILE, 'utf8')); } catch { return {}; }
+}
+
+// Accepte des IDs (entre guillemets !), des noms de rôle, et ceux ajoutés avec -staff
+function resolveStaffRoles(guild, key) {
+  const entries = [...(STAFF_ROLES[key] || []), ...(loadStaffFile()[key] || [])].map(String);
+  const found = new Set();
+  const missing = [];
+  for (const entry of entries) {
+    const role =
+      guild.roles.cache.get(entry) ||
+      guild.roles.cache.find((r) => r.name.toLowerCase() === entry.toLowerCase());
+    if (role) found.add(role.id);
+    else missing.push(entry);
+  }
+  return { ids: [...found], missing };
+}
 
 const CATEGORIES = {
   owner: {
@@ -85,7 +109,10 @@ async function handleSelect(interaction) {
     parent = await guild.channels.create({ name: 'Tickets', type: ChannelType.GuildCategory }).catch(() => null);
   }
 
-  const staffRoles = (STAFF_ROLES[key] || []).filter((id) => guild.roles.cache.has(id));
+  const { ids: staffRoles, missing } = resolveStaffRoles(guild, key);
+  if (missing.length) {
+    console.log(`[TICKETS] Rôle(s) staff introuvable(s) pour "${key}" : ${missing.join(', ')}`);
+  }
 
   const channelName = `ticket-${cat.channel}-${interaction.user.username}`.toLowerCase().slice(0, 90);
   const ticketChannel = await guild.channels
@@ -144,6 +171,12 @@ async function handleSelect(interaction) {
     ],
     components: [closeRow],
   });
+
+  if (staffRoles.length === 0) {
+    await ticketChannel
+      .send('-# ⚠️ Aucun rôle staff configuré pour cette catégorie : seuls les administrateurs voient ce ticket. (Commande : -staff)')
+      .catch(() => {});
+  }
 
   return interaction.editReply(`✅ Ton ticket a été créé : ${ticketChannel}`);
 }
