@@ -1,6 +1,6 @@
 // commands/vocal.js : -vocal [nombre]
 // Crée des salons vocaux "🚌 ・ Vocal 1", "🎒 ・ Vocal 2"... dans une catégorie "Vocaux".
-// Par défaut 50 salons (maximum 50 par catégorie sur Discord).
+// Par défaut 500 salons (maximum 500 par catégorie sur Discord).
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
