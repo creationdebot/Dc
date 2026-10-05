@@ -76,10 +76,16 @@ for (const file of commandFiles) {
 
 client.once('ready', () => {
   console.log(`Connecte en tant que ${client.user.tag}`);
-  require('./commands/acces').init(client); // <-- LIGNE AJOUTEE (boutons + retrait des roles)
-  require('./commands/verif').init(client); // <-- LIGNE AJOUTEE (verification par reaction)
-  require('./commands/perms').init(client); // <-- LIGNE AJOUTEE (roles temporaires)
-  require('./commands/secur').init(client); // <-- LIGNE AJOUTEE (securite serveur)
+  console.log('[DEBUG] Prefixe par defaut :', DEFAULT_PREFIX);
+  console.log('[DEBUG] Commandes chargees :', [...new Set(client.commands.values())].map(c => c.name).join(', '));
+  // Demarrage des modules (un fichier absent ou ancien ne fait plus planter le bot)
+  for (const name of ['acces', 'verif', 'perms', 'secur']) {
+    try {
+      require(`./commands/${name}`).init?.(client);
+    } catch (e) {
+      console.log(`[INIT] ${name} ignore : ${e.message}`);
+    }
+  }
   client.user.setPresence({
     activities: [{ name: `${DEFAULT_PREFIX}help` }],
     status: 'online',
@@ -110,13 +116,17 @@ client.on('messageCreate', async (message) => {
   incrementMessageCount(message.guild.id, message.author.id);
 
   const prefix = getPrefix(message.guild.id);
+  console.log(`[DEBUG] message recu de ${message.author.tag} : "${message.content}" (prefixe du bot : "${prefix}")`);
   if (!message.content.startsWith(prefix)) return;
 
   const args = message.content.slice(prefix.length).trim().split(/\s+/);
   const commandName = args.shift().toLowerCase();
 
   const command = client.commands.get(commandName);
-  if (!command) return;
+  if (!command) {
+    console.log(`[DEBUG] commande inconnue : "${commandName}"`);
+    return;
+  }
 
   if (!isAuthorized(message)) {
     return message.reply('❌ Tu n\'es pas autorise a utiliser ce bot. Demande a un administrateur de t\'ajouter avec `&buyer`.');
