@@ -6,7 +6,7 @@ const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const running = new Set();
 const CATEGORY_NAME = 'Vocaux';
-const MAX_PER_CATEGORY = 50;
+const MAX_PER_CATEGORY = 500;
 const DELAY = 1000; // 1 s entre chaque création (évite les limites de Discord)
 
 // Un emoji différent pour chaque vocal
