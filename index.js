@@ -79,7 +79,7 @@ client.once('ready', () => {
   console.log('[DEBUG] Prefixe par defaut :', DEFAULT_PREFIX);
   console.log('[DEBUG] Commandes chargees :', [...new Set(client.commands.values())].map(c => c.name).join(', '));
   // Demarrage des modules (un fichier absent ou ancien ne fait plus planter le bot)
-  for (const name of ['acces', 'verif', 'perms', 'secur']) {
+  for (const name of ['acces', 'verif', 'perms', 'secur', 'panel']) {
     try {
       require(`./commands/${name}`).init?.(client);
     } catch (e) {
@@ -280,7 +280,7 @@ client.on('guildMemberAdd', async (member) => {
 
 const TICKET_LABELS = {
   ticket_owner: { name: 'owner', title: '👑 Ticket - Parler a un owner' },
-  ticket_staff: { name: 'staff', title: '📋 Ticket - tu veux etre staff click sur ce ticket' },
+  ticket_staff: { name: 'staff', title: '📋 Ticket - Recrutement staff' },
   ticket_other: { name: 'question', title: '❓ Ticket - Autre question' },
 };
 
@@ -376,4 +376,5 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN)
+;
