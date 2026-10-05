@@ -15,9 +15,9 @@ const SELECT_ID = 'ticket_panel_select';
 // Exemple : owner: ['123456789012345678']
 // Les administrateurs voient toujours tous les tickets.
 const STAFF_ROLES = {
-  owner: [],
-  partenariat: [],
-  animation: [],
+  owner: [1556035670458237050],
+  partenariat: [1556753778483396669],
+  animation: [1556687531184103424],
 };
 
 const CATEGORIES = {
