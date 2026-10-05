@@ -9,7 +9,7 @@
 // "Punition" = on lui retire tous ses rôles (derank) + on annule son action.
 const fs = require('fs');
 const path = require('path');
-const { AuditLogEvent, EmbedBuilder } = require('discord.js');
+const { AuditLogEvent, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'secur.json');
 const LOG_CHANNEL_NAME = 'moderation-logs'; // salon de logs (optionnel)
@@ -48,8 +48,8 @@ async function log(guild, text) {
 }
 
 // Cherche dans le journal d'audit qui a fait l'action (avec quelques essais)
-async function findExecutor(guild, type, targetId, predicate) {
-  for (let i = 0; i < 4; i++) {
+async function findExecutor(guild, type, targetId, predicate, tries = 4) {
+  for (let i = 0; i < tries; i++) {
     const logs = await guild.fetchAuditLogs({ type, limit: 8 }).catch(() => null);
     const entry = logs?.entries.find(
       (e) =>
@@ -60,6 +60,10 @@ async function findExecutor(guild, type, targetId, predicate) {
     if (entry) return entry;
     await sleep(700);
   }
+  console.log(
+    `[SECUR] Aucun auteur trouvé dans les logs pour "${AuditLogEvent[type] ?? type}" ` +
+    `(le bot a-t-il la permission "Voir les logs du serveur" ?)`
+  );
   return null;
 }
 
@@ -94,24 +98,44 @@ async function derank(guild, userId, reason) {
 // ---------- Protections ----------
 function registerListeners(client) {
   // 1) Rôles donnés (à soi ou à quelqu'un d'autre)
+  const handledEntries = new Set();
   client.on('guildMemberUpdate', async (oldMember, newMember) => {
     const guild = newMember.guild;
     if (!isEnabled(guild)) return;
 
-    const added = newMember.roles.cache.filter(
-      (r) => !oldMember.roles.cache.has(r.id) && !r.managed
-    );
-    if (added.size === 0) return;
+    // Si on connaît l'ancien membre, on compare ses rôles. Sinon on passe par le journal d'audit.
+    const hasOld = !!oldMember?.roles?.cache;
+    let added = null;
+    if (hasOld) {
+      added = newMember.roles.cache.filter((r) => !oldMember.roles.cache.has(r.id) && !r.managed);
+      if (added.size === 0) return;
+    }
 
     const entry = await findExecutor(
       guild,
       AuditLogEvent.MemberRoleUpdate,
       newMember.id,
-      (e) => e.changes?.some((c) => c.key === '$add' && c.new?.some((r) => added.has(r.id)))
+      (e) =>
+        !handledEntries.has(e.id) &&
+        e.changes?.some((c) => c.key === '$add' && c.new?.some((r) => !added || added.has(r.id))),
+      hasOld ? 4 : 2
     );
-    if (!entry || isSafe(guild, entry.executorId)) return;
+    if (!entry) return;
 
-    await newMember.roles.remove(added, 'Sécurité : attribution de rôle non autorisée').catch(() => {});
+    if (handledEntries.size > 200) handledEntries.clear();
+    handledEntries.add(entry.id);
+    if (isSafe(guild, entry.executorId)) return;
+
+    if (!added) {
+      const ids = entry.changes
+        .filter((c) => c.key === '$add')
+        .flatMap((c) => (c.new || []).map((r) => r.id));
+      added = newMember.roles.cache.filter((r) => ids.includes(r.id) && !r.managed);
+    }
+
+    if (added.size) {
+      await newMember.roles.remove(added, 'Sécurité : attribution de rôle non autorisée').catch(() => {});
+    }
     const self = entry.executorId === newMember.id ? "s'est attribué" : `a donné à ${newMember.user.tag}`;
     await derank(guild, entry.executorId, `${self} le(s) rôle(s) ${added.map((r) => r.name).join(', ')}`);
   });
@@ -220,9 +244,11 @@ function registerListeners(client) {
 }
 
 let initialized = false;
-function init(client) {
+let initSource = null; // 'ready' = démarré par index.js, 'commande' = démarré par une commande
+function init(client, source = 'ready') {
   if (initialized) return;
   initialized = true;
+  initSource = source;
   registerListeners(client);
 }
 
@@ -233,7 +259,7 @@ module.exports = {
   init,
 
   async execute(message, args, client) {
-    init(client || message.client);
+    init(client || message.client, 'commande');
 
     const guild = message.guild;
     const cfg = getCfg(guild.id);
@@ -276,6 +302,37 @@ module.exports = {
       return message.reply('Utilisation : `&secur wl add|remove @personne` ou `&secur wl list`');
     }
 
+    // Diagnostic
+    if (sub === 'check' || sub === 'test') {
+      const me = guild.members.me;
+      const P = PermissionFlagsBits;
+      const ok = (b) => (b ? '✅' : '❌');
+      const perm = (flag) => ok(me.permissions.has(flag));
+      const myTop = me.roles.highest.position;
+      const above = guild.roles.cache.filter((r) => r.id !== guild.id && r.position > myTop).size;
+      const auditOk = await guild.fetchAuditLogs({ limit: 1 }).then(() => true).catch(() => false);
+
+      const lines = [
+        `${ok(cfg.enabled)} Sécurité activée (\`&secur on\`)`,
+        `${ok(initSource === 'ready')} Démarrage automatique via index.js` +
+          (initSource === 'ready' ? '' : ' → ajoute la ligne dans le `ready` de index.js'),
+        `${perm(P.ViewAuditLog)} Permission : voir les logs du serveur`,
+        `${ok(auditOk)} Lecture des logs d'audit`,
+        `${perm(P.ManageRoles)} Permission : gérer les rôles`,
+        `${perm(P.ManageChannels)} Permission : gérer les salons`,
+        `${perm(P.ManageGuild)} Permission : gérer le serveur`,
+        `${perm(P.KickMembers)} Permission : expulser des membres`,
+        `${ok(above === 0)} Rôle du bot tout en haut` + (above ? ` (${above} rôle(s) au-dessus)` : ''),
+        `ℹ️ Whitelist : ${cfg.whitelist.length} personne(s), jamais punies`,
+      ];
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('Diagnostic de la sécurité')
+        .setDescription(lines.join('\n'))
+        .setFooter({ text: 'Teste avec un compte qui n\'est ni propriétaire ni whitelisté.' });
+      return message.reply({ embeds: [embed] });
+    }
+
     // Statut
     const embed = new EmbedBuilder()
       .setColor(cfg.enabled ? 0x57f287 : 0xed4245)
@@ -288,7 +345,7 @@ module.exports = {
         "• Modifier les permissions d'un rôle\n" +
         '• Ajouter un bot\n' +
         "• Photo, bannière, nom, description et invite perso du serveur\n\n" +
-        '`&secur on` / `&secur off`\n`&secur wl add|remove @personne`\n`&secur wl list`'
+        '`&secur on` / `&secur off`\n`&secur wl add|remove @personne`\n`&secur wl list`\n`&secur check` (diagnostic)'
       )
       .setFooter({ text: `Whitelist : ${cfg.whitelist.length} personne(s)` });
     return message.reply({ embeds: [embed] });
