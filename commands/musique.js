@@ -11,7 +11,7 @@
 // Spotify ne donne pas le son : le bot retrouve chaque titre sur YouTube et le joue.
 //
 // Dépendances à ajouter dans package.json :
-//   @discordjs/voice, @snazzah/davey, play-dl, ffmpeg-static, opusscript,
+//   @discordjs/voice, @snazzah/davey, @iamtraction/play-dl, play-dl, ffmpeg-static, opusscript,
 //   libsodium-wrappers, spotify-url-info
 const { PermissionFlagsBits } = require('discord.js');
 
@@ -21,7 +21,11 @@ let play = null;
 let depsError = null;
 try {
   voice = require('@discordjs/voice');
-  play = require('play-dl');
+  try {
+    play = require('@iamtraction/play-dl'); // version maintenue de play-dl
+  } catch {
+    play = require('play-dl'); // ancienne version (repli)
+  }
 } catch (e) {
   depsError = e;
 }
@@ -135,6 +139,7 @@ function cleanup(guildId) {
 }
 
 async function startTrack(state, track) {
+  let step = 'recherche YouTube';
   try {
     // Titre Spotify : on cherche d'abord la vidéo YouTube correspondante
     if (!track.url) {
@@ -142,6 +147,7 @@ async function startTrack(state, track) {
       if (!found.length) throw new Error('introuvable sur YouTube');
       track.url = found[0].url;
     }
+    step = 'lecture du flux';
     const stream = await play.stream(track.url, { quality: 2 });
     const resource = createAudioResource(stream.stream, { inputType: stream.type });
     state.current = track;
@@ -149,8 +155,10 @@ async function startTrack(state, track) {
     state.textChannel?.send(`🎵 En lecture : **${track.title}**`).catch(() => {});
     return true;
   } catch (e) {
-    console.error('Lecture impossible :', track.title, e.message);
-    state.textChannel?.send(`❌ Impossible de lire **${track.title}** (${e.message})`).catch(() => {});
+    console.error(`[MUSIQUE] échec (${step}) pour "${track.title}" :`, e.stack || e.message);
+    state.textChannel
+      ?.send(`❌ Impossible de lire **${track.title}** (${step} : ${e.message})`)
+      .catch(() => {});
     return false;
   }
 }
