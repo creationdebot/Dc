@@ -28,6 +28,7 @@ try {
 const {
   joinVoiceChannel, createAudioPlayer, createAudioResource,
   AudioPlayerStatus, VoiceConnectionStatus, NoSubscriberBehavior, entersState,
+  generateDependencyReport,
 } = voice || {};
 
 const MAX_PLAYLIST = 300; // titres maximum pris dans une playlist
@@ -176,6 +177,12 @@ async function ensureState(message, voiceChannel) {
   if (!state || state.connection !== connection) {
     if (state) cleanup(guild.id);
 
+    connection.on('stateChange', (oldS, newS) => {
+      const extra = [newS.reason !== undefined ? `raison ${newS.reason}` : '', newS.closeCode ? `code ${newS.closeCode}` : '']
+        .filter(Boolean).join(', ');
+      console.log(`[MUSIQUE] connexion vocale : ${oldS.status} -> ${newS.status}${extra ? ` (${extra})` : ''}`);
+    });
+
     const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
     state = { connection, player, queue: [], current: null, textChannel: message.channel };
     states.set(guild.id, state);
@@ -207,8 +214,11 @@ async function ensureState(message, voiceChannel) {
   try {
     await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
   } catch {
+    const st = connection.state;
+    const code = st.closeCode ? `, code ${st.closeCode}` : '';
+    const status = st.status;
     cleanup(guild.id);
-    throw new Error('Impossible de rejoindre le salon vocal.');
+    throw new Error(`Impossible de rejoindre le salon vocal (état : ${status}${code}).`);
   }
   return state;
 }
@@ -216,13 +226,32 @@ async function ensureState(message, voiceChannel) {
 // ---------- Commande ----------
 module.exports = {
   name: 'musique',
-  aliases: ['playlists', 'playlist', 'skip', 'stop'],
+  aliases: ['playlists', 'playlist', 'skip', 'stop', 'mdebug'],
 
   async execute(message, args) {
+    const invokedFirst = message.content.trim().split(/\s+/)[0].toLowerCase();
+
+    // &mdebug : affiche ce qui est installé pour la musique
+    if (invokedFirst.endsWith('mdebug')) {
+      if (depsError) return message.reply(`❌ Dépendance manquante : \`${String(depsError.message).split('\n')[0]}\``);
+      let davey = 'non installé';
+      try { require.resolve('@snazzah/davey'); davey = 'installé'; } catch {}
+      const report = [
+        `Node : ${process.version}`,
+        `@snazzah/davey (DAVE) : ${davey}`,
+        `Cookie YouTube (YT_COOKIE) : ${process.env.YT_COOKIE ? 'oui' : 'non'}`,
+        '',
+        generateDependencyReport(),
+      ].join('\n');
+      return message.reply('```\n' + report.slice(0, 1800) + '\n```');
+    }
+
     if (depsError) {
       console.error('Dépendances musique manquantes :', depsError.message);
+      const detail = String(depsError.message || depsError).split('\n')[0];
       return message.reply(
-        "❌ Le système de musique n'est pas installé : ajoute les dépendances dans `package.json` (voir le début de `commands/musique.js`)."
+        "❌ Le système de musique n'est pas installé : ajoute les dépendances dans `package.json` (voir le début de `commands/musique.js`).\n" +
+        `Détail : \`${detail}\``
       );
     }
 
