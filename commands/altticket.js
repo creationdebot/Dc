@@ -29,6 +29,7 @@ module.exports = {
           const channel = await interaction.guild.channels.create({
             name: `ticket-${interaction.user.username}`,
             type: ChannelType.GuildText,
+            topic: `ticket:${interaction.user.id}`,
             permissionOverwrites: [
               { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
               { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
