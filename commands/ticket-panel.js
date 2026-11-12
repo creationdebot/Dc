@@ -1,12 +1,8 @@
-// Panel de tickets - discord.js v14
-// Installation : npm install discord.js
-// Lancement    : node ticket-panel.js
-// Utilisation  : /panel-tickets (réservé aux administrateurs)
+// Commande : &caca  -> envoie le panel de tickets (BL, cage, owner, co-owner)
+// A mettre dans le dossier /commands (et supprimer l'ancien ticket-panel.js)
+// Pas de client.login ici : on utilise le bot existant.
 
 const {
-  Client,
-  GatewayIntentBits,
-  Events,
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -14,24 +10,17 @@ const {
   ButtonStyle,
   ChannelType,
   PermissionFlagsBits,
-  SlashCommandBuilder,
-  REST,
-  Routes,
 } = require('discord.js');
 
 // ======================= CONFIGURATION =======================
 const config = {
-  TOKEN: 'TON_TOKEN_ICI',
-  CLIENT_ID: 'ID_DU_BOT',
-  GUILD_ID: 'ID_DU_SERVEUR',
-  CATEGORY_ID: 'ID_CATEGORIE_TICKETS', // catégorie où les tickets seront créés
-  STAFF_ROLE_ID: 'ID_ROLE_STAFF',      // staff qui gère les BL et cages
+  STAFF_ROLE_ID: 'ID_ROLE_STAFF',
   OWNER_ROLE_ID: 'ID_ROLE_OWNER',
   COOWNER_ROLE_ID: 'ID_ROLE_COOWNER',
+  CATEGORY_NAME: 'Tickets', // catégorie créée automatiquement si elle n'existe pas
   COLOR: 0x5865f2,
 };
 
-// Options du panel : "roles" = rôles qui voient le ticket
 const OPTIONS = {
   bl: {
     label: 'Demande de BL',
@@ -63,155 +52,174 @@ const OPTIONS = {
   },
 };
 
-// ======================= CLIENT =======================
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const SELECT_ID = 'tp_select';
+const CLOSE_ID = 'tp_close';
 
-// Enregistrement de la commande slash
-async function registerCommands() {
-  const command = new SlashCommandBuilder()
-    .setName('panel-tickets')
-    .setDescription('Envoie le panel de tickets dans ce salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+// ======================= GESTION DES INTERACTIONS =======================
+let listening = false;
 
-  const rest = new REST({ version: '10' }).setToken(config.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(config.CLIENT_ID, config.GUILD_ID), {
-    body: [command.toJSON()],
+function startListener(client) {
+  if (listening) return;
+  listening = true;
+
+  client.on('interactionCreate', async (interaction) => {
+    try {
+      // --- Choix dans le menu : création du ticket ---
+      if (interaction.isStringSelectMenu() && interaction.customId === SELECT_ID) {
+        const type = interaction.values[0];
+        const option = OPTIONS[type];
+        if (!option) return;
+
+        const guild = interaction.guild;
+        const user = interaction.user;
+        const topic = `tp:${user.id}:${type}`;
+
+        const existing = guild.channels.cache.find((c) => c.topic === topic);
+        if (existing) {
+          return interaction.reply({
+            content: `❌ Tu as déjà un ticket ouvert : ${existing}`,
+            ephemeral: true,
+          });
+        }
+
+        // Catégorie
+        let category = guild.channels.cache.find(
+          (c) => c.name === config.CATEGORY_NAME && c.type === ChannelType.GuildCategory
+        );
+        if (!category) {
+          category = await guild.channels
+            .create({ name: config.CATEGORY_NAME, type: ChannelType.GuildCategory })
+            .catch(() => null);
+        }
+
+        // On ne garde que les rôles qui existent vraiment
+        const roleIds = option.roles.filter((id) => guild.roles.cache.has(id));
+        const allow = [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.AttachFiles,
+        ];
+
+        const channel = await guild.channels
+          .create({
+            name: `${type}-${user.username}`.toLowerCase().slice(0, 90),
+            type: ChannelType.GuildText,
+            parent: category?.id,
+            topic,
+            permissionOverwrites: [
+              { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+              { id: user.id, allow },
+              ...roleIds.map((id) => ({ id, allow })),
+            ],
+          })
+          .catch((e) => {
+            console.error('[caca] création ticket :', e.message);
+            return null;
+          });
+
+        if (!channel) {
+          return interaction.reply({
+            content: '❌ Impossible de créer le ticket (permissions du bot ?).',
+            ephemeral: true,
+          });
+        }
+
+        const closeRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(CLOSE_ID)
+            .setLabel('Fermer le ticket')
+            .setEmoji('🔒')
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await channel.send({
+          content: `${user} ${roleIds.map((id) => `<@&${id}>`).join(' ')}`,
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(`${option.emoji} ${option.label}`)
+              .setDescription(`Bienvenue ${user} !\n\n${option.message}`)
+              .setColor(config.COLOR)
+              .setTimestamp(),
+          ],
+          components: [closeRow],
+        });
+
+        return interaction.reply({ content: `✅ Ticket créé : ${channel}`, ephemeral: true });
+      }
+
+      // --- Bouton de fermeture ---
+      if (interaction.isButton() && interaction.customId === CLOSE_ID) {
+        const channel = interaction.channel;
+        if (!channel.topic?.startsWith('tp:')) return;
+
+        const [, ownerId, type] = channel.topic.split(':');
+        const allowedRoles = OPTIONS[type]?.roles || [];
+        const canClose =
+          interaction.user.id === ownerId ||
+          interaction.member.permissions.has(PermissionFlagsBits.Administrator) ||
+          allowedRoles.some((id) => interaction.member.roles.cache.has(id));
+
+        if (!canClose) {
+          return interaction.reply({
+            content: "❌ Tu n'as pas la permission de fermer ce ticket.",
+            ephemeral: true,
+          });
+        }
+
+        await interaction.reply('🔒 Ce ticket sera fermé dans 5 secondes...');
+        setTimeout(() => channel.delete().catch(() => {}), 5000);
+      }
+    } catch (err) {
+      console.error('[caca]', err);
+      if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+        interaction.reply({ content: '❌ Une erreur est survenue.', ephemeral: true }).catch(() => {});
+      }
+    }
   });
 }
 
-client.once(Events.ClientReady, async () => {
-  await registerCommands();
-  console.log(`Connecté en tant que ${client.user.tag}`);
-});
+// ======================= COMMANDE =======================
+module.exports = {
+  name: 'caca',
+  aliases: ['ticketpanel'],
 
-// ======================= INTERACTIONS =======================
-client.on(Events.InteractionCreate, async (interaction) => {
-  try {
-    // --- /panel-tickets ---
-    if (interaction.isChatInputCommand() && interaction.commandName === 'panel-tickets') {
-      const embed = new EmbedBuilder()
-        .setTitle('🎫 Support - Tickets')
-        .setDescription(
-          'Choisis une option dans le menu ci-dessous pour ouvrir un ticket.\n\n' +
-            Object.values(OPTIONS)
-              .map((o) => `${o.emoji} **${o.label}**\n${o.description}`)
-              .join('\n\n')
-        )
-        .setColor(config.COLOR)
-        .setFooter({ text: 'Un seul ticket par catégorie et par personne.' });
+  // Appelé au démarrage si 'caca' est dans la liste de l'index
+  init(client) {
+    startListener(client);
+  },
 
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId('ticket_select')
-        .setPlaceholder('Sélectionne le type de ticket')
-        .addOptions(
-          Object.entries(OPTIONS).map(([value, o]) => ({
-            label: o.label,
-            description: o.description,
-            emoji: o.emoji,
-            value,
-          }))
-        );
+  async execute(message, args, client) {
+    startListener(client); // sécurité si init n'a pas été appelé
 
-      await interaction.channel.send({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(menu)],
-      });
-      return interaction.reply({ content: '✅ Panel envoyé.', ephemeral: true });
-    }
+    const embed = new EmbedBuilder()
+      .setTitle('🎫 Support - Tickets')
+      .setDescription(
+        'Choisis une option dans le menu ci-dessous pour ouvrir un ticket.\n\n' +
+          Object.values(OPTIONS)
+            .map((o) => `${o.emoji} **${o.label}**\n${o.description}`)
+            .join('\n\n')
+      )
+      .setColor(config.COLOR)
+      .setFooter({ text: 'Un seul ticket par catégorie et par personne.' });
 
-    // --- Sélection d'une option : création du ticket ---
-    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
-      const type = interaction.values[0];
-      const option = OPTIONS[type];
-      const guild = interaction.guild;
-      const user = interaction.user;
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(SELECT_ID)
+      .setPlaceholder('Sélectionne le type de ticket')
+      .addOptions(
+        Object.entries(OPTIONS).map(([value, o]) => ({
+          label: o.label,
+          description: o.description,
+          emoji: o.emoji,
+          value,
+        }))
+      );
 
-      // Évite les doublons
-      const topic = `ticket:${user.id}:${type}`;
-      const existing = guild.channels.cache.find((c) => c.topic === topic);
-      if (existing) {
-        return interaction.reply({
-          content: `❌ Tu as déjà un ticket ouvert : ${existing}`,
-          ephemeral: true,
-        });
-      }
+    await message.channel.send({
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
 
-      const channel = await guild.channels.create({
-        name: `${type}-${user.username}`.slice(0, 90),
-        type: ChannelType.GuildText,
-        parent: config.CATEGORY_ID,
-        topic,
-        permissionOverwrites: [
-          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-          {
-            id: user.id,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages,
-              PermissionFlagsBits.ReadMessageHistory,
-              PermissionFlagsBits.AttachFiles,
-            ],
-          },
-          ...option.roles.map((roleId) => ({
-            id: roleId,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages,
-              PermissionFlagsBits.ReadMessageHistory,
-              PermissionFlagsBits.AttachFiles,
-            ],
-          })),
-        ],
-      });
-
-      const embed = new EmbedBuilder()
-        .setTitle(`${option.emoji} ${option.label}`)
-        .setDescription(`Bienvenue ${user} !\n\n${option.message}`)
-        .setColor(config.COLOR)
-        .setTimestamp();
-
-      const closeBtn = new ButtonBuilder()
-        .setCustomId('ticket_close')
-        .setLabel('Fermer le ticket')
-        .setEmoji('🔒')
-        .setStyle(ButtonStyle.Danger);
-
-      await channel.send({
-        content: `${user} ${option.roles.map((r) => `<@&${r}>`).join(' ')}`,
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(closeBtn)],
-      });
-
-      return interaction.reply({
-        content: `✅ Ticket créé : ${channel}`,
-        ephemeral: true,
-      });
-    }
-
-    // --- Bouton de fermeture ---
-    if (interaction.isButton() && interaction.customId === 'ticket_close') {
-      const channel = interaction.channel;
-      const ownerId = channel.topic?.split(':')[1];
-      const isStaff = Object.values(OPTIONS)
-        .flatMap((o) => o.roles)
-        .some((roleId) => interaction.member.roles.cache.has(roleId));
-
-      if (interaction.user.id !== ownerId && !isStaff) {
-        return interaction.reply({
-          content: "❌ Tu n'as pas la permission de fermer ce ticket.",
-          ephemeral: true,
-        });
-      }
-
-      await interaction.reply('🔒 Le ticket sera supprimé dans 5 secondes...');
-      setTimeout(() => channel.delete().catch(() => {}), 5000);
-    }
-  } catch (err) {
-    console.error(err);
-    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      interaction.reply({ content: '❌ Une erreur est survenue.', ephemeral: true }).catch(() => {});
-    }
-  }
-});
-
-client.login(config.TOKEN);
+    message.delete().catch(() => {});
+  },
+};
