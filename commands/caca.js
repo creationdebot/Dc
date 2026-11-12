@@ -14,9 +14,9 @@ const {
 
 // ======================= CONFIGURATION =======================
 const config = {
-  STAFF_ROLE_ID: 'ID_ROLE_STAFF',
-  OWNER_ROLE_ID: 'ID_ROLE_OWNER',
-  COOWNER_ROLE_ID: 'ID_ROLE_COOWNER',
+  OWNER_ROLE_ID: '1570480657602314242',
+  OWNER_ROLE_ID: '1570480657602314242',
+  COOWNER_ROLE_ID: '1570480658663612577',
   CATEGORY_NAME: 'Tickets', // catégorie créée automatiquement si elle n'existe pas
   COLOR: 0x5865f2,
 };
