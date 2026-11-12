@@ -79,7 +79,7 @@ client.once('ready', () => {
   console.log('[DEBUG] Prefixe par defaut :', DEFAULT_PREFIX);
   console.log('[DEBUG] Commandes chargees :', [...new Set(client.commands.values())].map(c => c.name).join(', '));
   // Demarrage des modules (un fichier absent ou ancien ne fait plus planter le bot)
-  for (const name of ['acces', 'verif', 'perms', 'secur', 'panel']) {
+  for (const name of ['acces', 'verif', 'perms', 'secur', 'panel', 'caca']) {
     try {
       require(`./commands/${name}`).init?.(client);
     } catch (e) {
