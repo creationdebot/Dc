@@ -1,7 +1,7 @@
 // Panel de tickets - discord.js v14
 // Installation : npm install discord.js
 // Lancement    : node ticket-panel.js
-// Utilisation  : /caca (réservé aux administrateurs)
+// Utilisation  : /panel-tickets (réservé aux administrateurs)
 
 const {
   Client,
@@ -69,7 +69,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 // Enregistrement de la commande slash
 async function registerCommands() {
   const command = new SlashCommandBuilder()
-    .setName('caca')
+    .setName('panel-tickets')
     .setDescription('Envoie le panel de tickets dans ce salon')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
@@ -88,7 +88,7 @@ client.once(Events.ClientReady, async () => {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     // --- /panel-tickets ---
-    if (interaction.isChatInputCommand() && interaction.commandName === 'caca') {
+    if (interaction.isChatInputCommand() && interaction.commandName === 'panel-tickets') {
       const embed = new EmbedBuilder()
         .setTitle('🎫 Support - Tickets')
         .setDescription(
